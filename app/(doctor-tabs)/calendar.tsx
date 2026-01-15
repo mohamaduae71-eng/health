@@ -6,11 +6,13 @@ import {
   ScrollView,
   TouchableOpacity,
   FlatList,
+  Alert,
 } from 'react-native';
 import { Plus, Clock, Trash2 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
+import { AddAvailabilityModal } from '@/components/AddAvailabilityModal';
 import { colors, spacing, typography, borderRadius } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -29,7 +31,8 @@ export default function DoctorCalendarScreen() {
   const { user } = useAuth();
   const [availability, setAvailability] = useState<AvailabilitySlot[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDay, setSelectedDay] = useState(new Date().getDay());
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
 
   useEffect(() => {
     if (user) {
@@ -72,6 +75,39 @@ export default function DoctorCalendarScreen() {
     }
   };
 
+  const handleAddAvailability = async (
+    startTime: string,
+    endTime: string,
+    slotDuration: number
+  ) => {
+    if (!user?.id) return;
+
+    try {
+      const { error } = await supabase.from('doctor_availability').insert({
+        doctor_id: user.id,
+        day_of_week: selectedDayIndex,
+        start_time: startTime,
+        end_time: endTime,
+        slot_duration: slotDuration,
+        is_available: true,
+      } as any);
+
+      if (error) throw error;
+
+      Alert.alert('Success', 'Availability added successfully');
+      fetchAvailability();
+    } catch (error: any) {
+      console.error('Error adding availability:', error);
+      Alert.alert('Error', error.message || 'Failed to add availability');
+      throw error;
+    }
+  };
+
+  const openAddModal = (dayIndex: number) => {
+    setSelectedDayIndex(dayIndex);
+    setModalVisible(true);
+  };
+
   const formatTime = (timeString: string) => {
     const [hours, minutes] = timeString.split(':');
     const hour = parseInt(hours);
@@ -87,7 +123,10 @@ export default function DoctorCalendarScreen() {
       <Card style={styles.dayCard}>
         <View style={styles.dayHeader}>
           <Text style={styles.dayName}>{DAYS[dayIndex]}</Text>
-          <TouchableOpacity style={styles.addButton}>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => openAddModal(dayIndex)}
+          >
             <Plus size={20} color={colors.primary[500]} />
           </TouchableOpacity>
         </View>
@@ -131,6 +170,14 @@ export default function DoctorCalendarScreen() {
           {DAYS.map((_, index) => renderDaySlots(index))}
         </View>
       </ScrollView>
+
+      <AddAvailabilityModal
+        visible={modalVisible}
+        dayOfWeek={selectedDayIndex}
+        dayName={DAYS[selectedDayIndex]}
+        onClose={() => setModalVisible(false)}
+        onAdd={handleAddAvailability}
+      />
     </View>
   );
 }
